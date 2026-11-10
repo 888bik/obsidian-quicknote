@@ -1,0 +1,165 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LingCore/WinShun-plugins/main/schema/plugin.schema.json",
+  "manifest": 1,
+  "id": "888bik.obsidian-quicknote",
+  "name": "Obsidian 快速记录中心",
+  "version": "1.0.1",
+  "description": "在 Win顺 中快速记录笔记、添加待办、打开日记和收集箱，并搜索标题与使用模板。",
+  "author": "888bik",
+  "license": "MIT",
+  "runtime": {
+    "mode": "once",
+    "program": "python",
+    "script": "main.py",
+    "timeoutMs": 10000,
+    "debounceMs": 220,
+    "sandbox": "normal"
+  },
+  "permissions": [
+    "files:read",
+    "files:write"
+  ],
+  "settings": [
+    {
+      "key": "vault_1",
+      "type": "folder",
+      "title": "Vault 1（主 Vault）",
+      "hint": "选择 Obsidian Vault 根目录；至少配置一个 Vault。",
+      "default": ""
+    },
+    {
+      "key": "vault_2",
+      "type": "folder",
+      "title": "Vault 2（可选）",
+      "hint": "第二个 Vault 根目录，可留空。",
+      "default": ""
+    },
+    {
+      "key": "vault_3",
+      "type": "folder",
+      "title": "Vault 3（可选）",
+      "hint": "第三个 Vault 根目录，可留空。",
+      "default": ""
+    },
+    {
+      "key": "default_vault",
+      "type": "choice",
+      "title": "默认记录位置",
+      "hint": "多 Vault 时，默认使用哪个 Vault；也可在命令中指定 --vault 2 或 --vault 3。",
+      "default": "1",
+      "options": [
+        "1",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "key": "notes_folder",
+      "type": "text",
+      "title": "笔记目录",
+      "hint": "可自定义，填 Vault 内的相对路径。例：03_Projects；模板创建的笔记保存到这里。",
+      "default": "Notes"
+    },
+    {
+      "key": "daily_folder",
+      "type": "text",
+      "title": "日记目录",
+      "hint": "可自定义，填 Vault 内的相对路径。例：Daily 或 02_Reading/Daily。",
+      "default": "Daily"
+    },
+    {
+      "key": "inbox_file",
+      "type": "text",
+      "title": "收集箱文件",
+      "hint": "可自定义，填 Vault 内的相对路径。例：Inbox/收集箱.md 或 02_Reading/收集箱.md。",
+      "default": "Inbox/收集箱.md"
+    },
+    {
+      "key": "todo_file",
+      "type": "text",
+      "title": "待办文件",
+      "hint": "可自定义，填 Vault 内的相对路径。例：Tasks.md 或 02_Reading/Tasks.md。",
+      "default": "Tasks.md"
+    },
+    {
+      "key": "templates_folder",
+      "type": "text",
+      "title": "模板目录",
+      "hint": "可自定义，填 Vault 内的相对路径。例：Templates；模板文件为 Markdown。",
+      "default": "Templates"
+    },
+    {
+      "key": "detect_code",
+      "type": "bool",
+      "title": "自动识别代码片段",
+      "hint": "识别常见语言并添加 Markdown 代码围栏。",
+      "default": true
+    },
+    {
+      "key": "add_source_time",
+      "type": "bool",
+      "title": "添加来源和时间",
+      "hint": "写入收集箱的记录自动添加时间与 Win顺 来源标记。",
+      "default": true
+    },
+    {
+      "key": "open_after_save",
+      "type": "bool",
+      "title": "保存后打开笔记",
+      "hint": "保存成功后使用 Windows 默认 Markdown 关联程序打开文件（建议关联到 Obsidian）。",
+      "default": true
+    }
+  ],
+  "commands": [
+    {
+      "id": "note",
+      "keyword": [
+        "note",
+        "记录",
+        "笔记"
+      ],
+      "title": "快速记录 / 搜索笔记",
+      "description": "把内容记录到收集箱，或按关键词搜索笔记标题。",
+      "hint": "输入要记录的内容，或输入标题关键词；支持 --template。",
+      "icon": "glyph:U+E8A5",
+      "cache": 0
+    },
+    {
+      "id": "todo",
+      "keyword": [
+        "todo",
+        "待办"
+      ],
+      "title": "添加待办事项",
+      "description": "将待办事项追加到配置的 Markdown 待办文件。",
+      "hint": "输入待办内容。",
+      "icon": "glyph:U+E823",
+      "cache": 0
+    },
+    {
+      "id": "daily",
+      "keyword": [
+        "daily",
+        "日记"
+      ],
+      "title": "打开今日日记",
+      "description": "打开当天日记；文件不存在时，确认后创建。",
+      "hint": "按 Enter 打开或创建今日日记。",
+      "icon": "glyph:U+E787",
+      "cache": 0
+    },
+    {
+      "id": "inbox",
+      "keyword": [
+        "inbox",
+        "收集箱"
+      ],
+      "title": "打开收集箱",
+      "description": "打开 Markdown 收集箱；文件不存在时，确认后创建。",
+      "hint": "按 Enter 打开或创建收集箱。",
+      "icon": "glyph:U+E8B7",
+      "cache": 0
+    }
+  ],
+  "homepage": "https://github.com/888bik/obsidian-quicknote"
+}
