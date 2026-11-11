@@ -123,7 +123,9 @@ def safe_filename(title: str, fallback: str) -> str:
     name = name[:90].rstrip(" .")
     if not name:
         name = fallback
-    if name.upper() in {"CON", "PRN", "AUX", "NUL"} or re.fullmatch(r"COM[1-9]|LPT[1-9]", name.upper()):
+    # Device names are reserved with or without an extension: con.txt, COM1.md.
+    stem = name.split(".", 1)[0].upper()
+    if stem in {"CON", "PRN", "AUX", "NUL"} or re.fullmatch(r"COM[1-9]|LPT[1-9]", stem):
         name = f"_{name}"
     return name
 
@@ -313,12 +315,18 @@ def find_exact_duplicates(vaults: Sequence[Tuple[int, Path]], content: str) -> L
     found = []
     checked = 0
     for _index, vault in vaults:
+        vault_root = vault.resolve()
         for path in iter_markdown(vault, max_files=MAX_DUP_FILES):
             try:
                 if path.is_symlink() or path.stat().st_size > MAX_DUP_FILE_BYTES:
                     continue
+                # A junction inside the vault can point outside; never read it.
+                try:
+                    path.resolve().relative_to(vault_root)
+                except ValueError:
+                    continue
                 existing = path.read_text(encoding="utf-8-sig", errors="ignore")
-            except (OSError, UnicodeError):
+            except (OSError, UnicodeError, RuntimeError):
                 continue
             checked += 1
             if needle in normalize_text(existing):
@@ -598,15 +606,16 @@ def append_todo(vault: Path, relative: str, text: str, stamp: datetime) -> Path:
     return target.resolve()
 
 
-def write_new_file(target: Path, content: str) -> Path:
+def write_new_file(target: Path, content: str) -> Tuple[Path, bool]:
+    """Create the file; on collision return (target, False) and leave it untouched."""
     target = target.resolve(strict=False)
     ensure_parent(target)
     try:
         with target.open("x", encoding="utf-8", newline="\n") as handle:
             handle.write(content)
     except FileExistsError:
-        pass
-    return target.resolve()
+        return target.resolve(), False
+    return target.resolve(), True
 
 
 def unique_note_path(vault: Path, notes_folder: str, title: str, stamp: datetime) -> Tuple[Path, str]:
@@ -705,9 +714,14 @@ def action_result(req: dict, settings: dict) -> None:
         if target.exists():
             if not target.is_file():
                 raise PluginError("目标路径存在，但不是普通文件")
+            created = False
         else:
-            write_new_file(target, content)
-        winshun.effects(winshun.notify(f"已准备{data.get('label', '文件')}"), winshun.open_path(str(target)))
+            target, created = write_new_file(target, content)
+        if created:
+            message = f"已准备{data.get('label', '文件')}"
+        else:
+            message = f"文件已存在，未覆盖，已打开现有文件：{target.name}"
+        winshun.effects(winshun.notify(message), winshun.open_path(str(target)))
         return
 
     if kind == "template":
@@ -726,8 +740,12 @@ def action_result(req: dict, settings: dict) -> None:
         title = safe_filename(title, f"未命名-{stamp:%Y%m%d-%H%M%S}")
         target, relative = unique_note_path(vault, str(settings.get("notes_folder", "Notes")), title, stamp)
         output = ensure_frontmatter(substitute_template(template, title, stamp), stamp, title)
-        write_new_file(target, output)
-        effects = [winshun.notify(f"已使用模板创建：{target.name}")]
+        target, created = write_new_file(target, output)
+        if created:
+            message = f"已使用模板创建：{target.name}"
+        else:
+            message = f"文件已存在，未覆盖，已打开现有文件：{target.name}"
+        effects = [winshun.notify(message)]
         if settings.get("open_after_save", True):
             effects.append(winshun.open_path(str(target)))
         winshun.effects(*effects)

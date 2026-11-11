@@ -119,7 +119,11 @@ wsbench --plugin .\obsidian-quicknote --query "daily" --setting vault_1="D:\Note
 python -m unittest discover -s tests -v
 ```
 
-测试覆盖输入解析、代码识别、重复检测、路径穿越拦截、文件创建和追加、协议 JSON 输出，以及 `dispatch()` 异常降级、官方 SDK `ActionRequest` 兼容。真实 Win顺 消息记录和 `wsbench` 往返需要在安装 Win顺 的 Windows 环境中验证。
+测试覆盖输入解析、代码识别、重复检测、路径穿越拦截、文件创建和追加、协议 JSON 输出，以及 `dispatch()` 异常降级、官方 SDK `ActionRequest` 兼容；当前 26 个测试。真实 Win顺 消息记录和 `wsbench` 往返需要在安装 Win顺 的 Windows 环境中验证。
+
+## 更新记录
+
+- 1.0.2：查重不再读取 Vault 外的目录链接文件；`safe_filename` 也拦截 `con.txt` 这类带扩展名的设备名；新建文件遇到同名时提示「已存在，未覆盖」，不再谎报成功。
 
 ## 许可证
 

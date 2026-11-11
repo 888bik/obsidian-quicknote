@@ -86,6 +86,126 @@ class ObsidianQuickNoteTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0][0], existing.resolve())
 
+    def test_duplicate_check_ignores_paths_outside_the_vault(self):
+        outside = Path(self.tmp.name) / "outside" / "leak.md"
+        outside.parent.mkdir()
+        content = "这是一段需要检测重复内容的完整笔记。"
+        outside.write_text(content, encoding="utf-8")
+
+        with mock.patch.object(main, "iter_markdown", return_value=[outside]):
+            result = main.find_exact_duplicates([(1, self.vault)], content)
+
+        self.assertEqual(result, [])
+
+    @unittest.skipUnless(os.name == "nt", "目录联接只在 Windows 上测试")
+    def test_duplicate_check_skips_directory_junctions(self):
+        content = "这是一段需要检测重复内容的完整笔记。"
+        outside_dir = Path(self.tmp.name) / "outside"
+        outside_dir.mkdir()
+        outside_file = outside_dir / "leak.md"
+        outside_file.write_text(content, encoding="utf-8")
+
+        link = self.vault / "junction"
+        proc = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(outside_dir)],
+            capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            self.skipTest("无法创建目录联接：%s" % proc.stderr)
+        try:
+            inside = self.vault / "Notes" / "dup.md"
+            inside.parent.mkdir()
+            inside.write_text(content, encoding="utf-8")
+
+            result = main.find_exact_duplicates([(1, self.vault)], content)
+            paths = [path for path, _title in result]
+
+            self.assertIn(inside.resolve(), paths)
+            self.assertNotIn(outside_file.resolve(), paths)
+        finally:
+            if link.exists():
+                os.rmdir(link)
+
+    def test_safe_filename_blocks_device_names_with_extensions(self):
+        self.assertEqual(main.safe_filename("con", "fallback"), "_con")
+        self.assertEqual(main.safe_filename("con.txt", "fallback"), "_con.txt")
+        self.assertEqual(main.safe_filename("COM1.md", "fallback"), "_COM1.md")
+        self.assertEqual(main.safe_filename("NUL.txt", "fallback"), "_NUL.txt")
+        self.assertEqual(main.safe_filename("mycon", "fallback"), "mycon")
+        self.assertEqual(main.safe_filename("concert", "fallback"), "concert")
+        self.assertEqual(main.safe_filename("con2", "fallback"), "con2")
+        self.assertEqual(main.safe_filename("", "fallback"), "fallback")
+
+    def test_write_new_file_reports_created_and_keeps_the_old_content(self):
+        target = self.vault / "Notes" / "new.md"
+
+        path, created = main.write_new_file(target, "第一版")
+
+        self.assertTrue(created)
+        self.assertEqual(path.read_text(encoding="utf-8"), "第一版")
+
+        path, created = main.write_new_file(target, "第二版")
+
+        self.assertFalse(created)
+        self.assertEqual(path.read_text(encoding="utf-8"), "第一版")
+
+    def action_effects(self, request):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            main.action_result(request, self.settings)
+        return json.loads(output.getvalue())["effects"]
+
+    def create_open_request(self, relative, content="内容", label="今日日记"):
+        return {
+            "action": "open",
+            "item": {"data": {
+                "kind": "create-open",
+                "vault_index": 1,
+                "relative_path": relative,
+                "content": content,
+                "label": label,
+            }},
+        }
+
+    def test_create_open_new_file_uses_the_success_message(self):
+        effects = self.action_effects(self.create_open_request("Daily/2026-11-10.md"))
+
+        self.assertEqual(effects[0], {"type": "notify", "text": "已准备今日日记"})
+        self.assertTrue((self.vault / "Daily" / "2026-11-10.md").exists())
+
+    def test_create_open_existing_file_reports_no_overwrite(self):
+        target = self.vault / "Daily" / "2026-11-10.md"
+        target.parent.mkdir()
+        target.write_text("原来的内容", encoding="utf-8")
+
+        effects = self.action_effects(self.create_open_request("Daily/2026-11-10.md"))
+
+        self.assertIn("已存在，未覆盖", effects[0]["text"])
+        self.assertIn("现有文件", effects[0]["text"])
+        self.assertEqual(target.read_text(encoding="utf-8"), "原来的内容")
+
+    def test_template_existing_file_reports_no_overwrite(self):
+        template = self.vault / "Templates" / "会议纪要.md"
+        template.write_text("# {{title}}\n", encoding="utf-8")
+        target = self.vault / "Notes" / "fixed.md"
+        target.parent.mkdir()
+        target.write_text("旧内容", encoding="utf-8")
+        request = {
+            "action": "use-template",
+            "item": {"data": {
+                "kind": "template",
+                "vault_index": 1,
+                "template_rel": "Templates/会议纪要.md",
+                "custom_title": "fixed",
+            }},
+        }
+
+        with mock.patch.object(main, "unique_note_path", return_value=(target, "Notes/fixed.md")):
+            effects = self.action_effects(request)
+
+        self.assertIn("已存在，未覆盖", effects[0]["text"])
+        self.assertEqual(target.read_text(encoding="utf-8"), "旧内容")
+
     def test_query_does_not_write(self):
         rows = main.query(QueryStub("note", "一条仅用于查询预览的记录"), self.settings)
         self.assertTrue(any(row.get("data", {}).get("kind") == "append-note" for row in rows))
@@ -251,6 +371,16 @@ class ObsidianQuickNoteTests(unittest.TestCase):
         target = self.vault / "Inbox" / "收集箱.md"
         self.assertTrue(target.exists())
         self.assertIn("经官方 SDK 对象保存的记录", target.read_text(encoding="utf-8"))
+
+
+class ManifestTests(unittest.TestCase):
+    def test_identity(self):
+        plugin_dir = Path(__file__).resolve().parents[1]
+        manifest = json.loads((plugin_dir / "plugin.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["id"], "888bik.obsidian-quicknote")
+        self.assertEqual(manifest["id"], plugin_dir.name)
+        self.assertEqual(manifest["version"], "1.0.2")
 
 
 if __name__ == "__main__":

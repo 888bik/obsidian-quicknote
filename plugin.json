@@ -3,7 +3,7 @@
   "manifest": 1,
   "id": "888bik.obsidian-quicknote",
   "name": "Obsidian 快速记录中心",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "在 Win顺 中快速记录笔记、添加待办、打开日记和收集箱，并搜索标题与使用模板。",
   "author": "888bik",
   "license": "MIT",
